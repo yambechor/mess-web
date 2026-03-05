@@ -1,7 +1,23 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Image from "next/image";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.messnightlife.com";
+
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  try {
+    const res = await fetch(`${API_URL}/api/v1/events/?limit=200`, {
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return [];
+    const events: { id: string }[] = await res.json();
+    return events.map((event) => ({ id: event.id }));
+  } catch {
+    return [];
+  }
+}
 
 function formatPrice(price: number, currency: string): string {
   const currencySymbols: Record<string, string> = {
@@ -86,6 +102,9 @@ export async function generateMetadata({
   return {
     title: `${event.title} - Mess`,
     description,
+    alternates: {
+      canonical: `/events/${id}`,
+    },
     openGraph: {
       title: event.title,
       description,
@@ -131,15 +150,57 @@ export default async function EventPage({
   const locationDisplay = event.venue_name || event.location;
   const addressDisplay = event.venue_address || event.location;
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    name: event.title,
+    description: event.description,
+    startDate: event.start_time,
+    ...(event.end_time && { endDate: event.end_time }),
+    location: {
+      "@type": "Place",
+      name: locationDisplay,
+      ...(addressDisplay && {
+        address: {
+          "@type": "PostalAddress",
+          streetAddress: addressDisplay,
+        },
+      }),
+    },
+    ...(imageUrl && { image: imageUrl }),
+    url: `https://messnightlife.com/events/${id}`,
+    ...(event.organizer && {
+      organizer: {
+        "@type": "Organization",
+        name: event.organizer.full_name || event.organizer.username,
+      },
+    }),
+    ...(event.price !== undefined && event.price > 0 && {
+      offers: {
+        "@type": "Offer",
+        price: event.price,
+        priceCurrency: event.currency || "USD",
+        availability: "https://schema.org/InStock",
+        url: `https://messnightlife.com/events/${id}`,
+      },
+    }),
+  };
+
   return (
     <main className="min-h-screen bg-black">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Header Image */}
       <div className="relative w-full aspect-[16/10] max-h-[50vh]">
         {imageUrl ? (
-          <img
+          <Image
             src={imageUrl}
             alt={event.title}
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
+            priority
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-cyan-500 to-cyan-700 flex items-center justify-center">

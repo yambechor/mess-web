@@ -5,6 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://messnightlife.com"),
   title: "Mess - Nightlife Events",
   description: "Discover the best nightlife events near you",
   icons: {
